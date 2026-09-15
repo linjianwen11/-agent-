@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>生理信号分析 Agent</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, "Microsoft YaHei", sans-serif;
+    background: #eef1f6; height: 100vh;
+    display: flex; justify-content: center;
+  }
+  .app { width: 100%; max-width: 780px; display: flex; flex-direction: column; height: 100vh; }
+  header { padding: 16px 20px; background: #1e293b; color: #fff; }
+  header h1 { font-size: 18px; }
+  header p { font-size: 12px; opacity: .75; margin-top: 4px; }
+  #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 78%; padding: 10px 14px; border-radius: 12px; line-height: 1.65; font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+  .msg.user { align-self: flex-end; background: #2563eb; color: #fff; }
+  .msg.bot { align-self: flex-start; background: #fff; border: 1px solid #e2e8f0; }
+  .trace { font-size: 12px; color: #64748b; margin-top: 8px; }
+  .trace summary { cursor: pointer; }
+  .trace pre { background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px; border-radius: 6px; overflow-x: auto; font-size: 11px; margin-top: 6px; }
+  .inputbar { display: flex; gap: 8px; padding: 12px 20px; background: #fff; border-top: 1px solid #e2e8f0; }
+  input { flex: 1; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; outline: none; }
+  input:focus { border-color: #2563eb; }
+  button { padding: 10px 20px; background: #2563eb; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .typing { color: #64748b; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>🧠 生理信号分析 Agent</h1>
+    <p>EMG / NIRS 数据 + Function Calling · 输入一句话，它自己调工具分析</p>
+  </header>
+  <div id="chat"></div>
+  <div class="inputbar">
+    <input id="input" placeholder="输入你的问题，比如：分析 emg_fatigue.csv 的疲劳程度" autocomplete="off">
+    <button id="send">发送</button>
+  </div>
+</div>
+<script>
+  const chatEl = document.getElementById('chat');
+  const input = document.getElementById('input');
+  const sendBtn = document.getElementById('send');
+
+  function addMsg(role, text) {
+    const div = document.createElement('div');
+    div.className = 'msg ' + role;
+    div.textContent = text;
+    chatEl.appendChild(div);
+    chatEl.scrollTop = chatEl.scrollHeight;
+    return div;
+  }
+
+  async function sendMsg() {
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    sendBtn.disabled = true;
+    addMsg('user', text);
+    const typing = addMsg('bot', '正在分析...');
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text })
+      });
+      const data = await res.json();
+      typing.textContent = '';
+      const answer = document.createElement('div');
+      answer.textContent = data.answer;
+      typing.appendChild(answer);
+      if (data.trace && data.trace.length) {
+        const details = document.createElement('details');
+        details.className = 'trace';
+        const summary = document.createElement('summary');
+        summary.textContent = '工具调用过程（' + data.trace.length + ' 次）';
+        details.appendChild(summary);
+        data.trace.forEach((t, i) => {
+          const pre = document.createElement('pre');
+          pre.textContent = '第 ' + (i + 1) + ' 次调用 ' + t.tool + '\n' +
+            JSON.stringify(t.result, null, 2);
+          details.appendChild(pre);
+        });
+        typing.appendChild(details);
+      }
+    } catch (e) {
+      typing.textContent = '出错了：' + e.message;
+    }
+    sendBtn.disabled = false;
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  sendBtn.addEventListener('click', sendMsg);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') sendMsg(); });
+</script>
+</body>
+</html>
