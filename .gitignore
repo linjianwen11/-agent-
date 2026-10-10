@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 .env
 .venv/
+# 运行时生成的 SQLite 检查点数据(可中断Agent状态),不入库
+*.db
